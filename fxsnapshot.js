@@ -16,6 +16,10 @@ const localUrl = 'http://localhost:8080';
 let url = process.argv[3] || localUrl;
 const isLocal = url == localUrl;
 
+if (!isNaN(url)) {
+  url = `https://www.fxhash.xyz/generative/${url}`;
+}
+
 const viewportSettings = {
   deviceScaleFactor: 1,
   width: 800,
@@ -25,9 +29,16 @@ const viewportSettings = {
 const getIpfsUrl = async (url) => {
   await page.goto(url);
 
-  return await page.evaluate(() => {
-    return document.querySelector('a[href^="https://gateway.fxhash2.xyz/ipfs"][class^="Button"]').href.split('/?')[0];
+  const IpfsUrl = await page.evaluate(() => {
+    return document.querySelector('a[href^="https://gateway.fxhash2.xyz/ipfs"][class^="Button"]')?.href?.split('/?')[0];
   });
+
+  if (!IpfsUrl) {
+    console.log('usage: node fxsnapshot.js <count> <project-id|project-url>');
+    process.exit(1);
+  }
+
+  return IpfsUrl;
 }
 
 const getFxhashedUrl = (url) => {
