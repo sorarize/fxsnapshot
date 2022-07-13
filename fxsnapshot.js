@@ -4,6 +4,9 @@ const fs = require('fs').promises;
 const total = parseInt(process.argv[2]);
 let count = 1;
 
+let browser;
+let page;
+
 if (isNaN(total)) {
   console.log('usage: node fxsnapshot.js <count>');
   process.exit(1);
@@ -19,8 +22,7 @@ const viewportSettings = {
   height: 800,
 };
 
-
-const getIpfsUrl = async (page, url) => {
+const getIpfsUrl = async (url) => {
   await page.goto(url);
 
   return await page.evaluate(() => {
@@ -28,7 +30,13 @@ const getIpfsUrl = async (page, url) => {
   });
 }
 
-const saveFrame = async (page, filename) => {
+const getFxhashedUrl = (url) => {
+  const alphabet = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  const fxhash = "oo" + Array(49).fill(0).map(_ => alphabet[(Math.random() * alphabet.length) | 0]).join('');
+  return `${url}/?fxhash=${fxhash}`;
+}
+
+const saveFrame = async (filename) => {
   const base64 = await page.$eval('canvas', (el) => {
     return el.toDataURL();
   });
@@ -39,13 +47,7 @@ const saveFrame = async (page, filename) => {
   });
 };
 
-const getFxhashedUrl = (url) => {
-  const alphabet = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
-  const fxhash = "oo" + Array(49).fill(0).map(_ => alphabet[(Math.random() * alphabet.length) | 0]).join('');
-  return `${url}/?fxhash=${fxhash}`;
-}
-
-const takeShot = async (page, url) => {
+const takeShot = async () => {
   const { fxhash, title } = await page.evaluate(() => {
     return {
       fxhash: window.fxhash,
@@ -55,11 +57,11 @@ const takeShot = async (page, url) => {
   const iteration = String(count).padStart(4, '0');
   const f = `images/${title}-${iteration}-${fxhash}.png`;
   console.log(f);
-  await saveFrame(page, f);
+  await saveFrame(f);
   if (count < total) {
     count += 1;
-    await page.goto(url);
-    bindFxpreviewHandler(page);
+    await page.goto(getFxhashedUrl(url));
+    bindFxpreviewHandler();
   }
   else {
     process.exit(0);
@@ -67,7 +69,7 @@ const takeShot = async (page, url) => {
 }
 
 // waitForEvent from https://github.com/puppeteer/puppeteer/issues/2455
-async function waitForEvent(page, event, timeout = 10000) {
+async function waitForEvent(event, timeout = 10000) {
   return Promise.race([
     page.evaluate(
       event => new Promise(resolve => document.addEventListener(event, resolve)),
@@ -77,14 +79,14 @@ async function waitForEvent(page, event, timeout = 10000) {
   ]);
 }
 
-async function bindFxpreviewHandler(page) {
-  await waitForEvent(page, 'fxhash-preview');
-  takeShot(page, getFxhashedUrl(url));
+async function bindFxpreviewHandler() {
+  await waitForEvent('fxhash-preview');
+  takeShot();
 }
 
 (async () => {
 
-  let browser = await puppeteer.launch({
+  browser = await puppeteer.launch({
     ignoreHTTPSErrors: true,
   });
 
@@ -92,7 +94,7 @@ async function bindFxpreviewHandler(page) {
     process.exit(1);
   }
 
-  let page = await browser.newPage();
+  page = await browser.newPage();
   await page.setViewport(viewportSettings);
 
   if (!page) {
@@ -100,7 +102,7 @@ async function bindFxpreviewHandler(page) {
   }
 
   if (!isLocal) {
-    url = await getIpfsUrl(page, url);
+    url = await getIpfsUrl(url);
   }
 
   page.on('error', (err) => {
@@ -108,6 +110,6 @@ async function bindFxpreviewHandler(page) {
   });
 
   await page.goto(getFxhashedUrl(url));
-  bindFxpreviewHandler(page);
+  bindFxpreviewHandler();
 
 })();
