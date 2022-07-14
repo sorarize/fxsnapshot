@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 
 const localUrl = 'http://localhost:8080';
 const total = parseInt(process.argv[2]);
+const timeout = parseInt(process.argv[4]) || 10000;
 
 const viewportSettings = {
   deviceScaleFactor: 1,
@@ -72,7 +73,7 @@ const takeShot = async () => {
 }
 
 // waitForEvent from https://github.com/puppeteer/puppeteer/issues/2455
-async function waitForEvent(event, timeout = 10000) {
+async function waitForEvent(event) {
   return Promise.race([
     page.evaluate(
       event => new Promise(resolve => window.addEventListener(event, resolve)),
