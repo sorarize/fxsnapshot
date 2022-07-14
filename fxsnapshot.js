@@ -15,6 +15,7 @@ let count = 1;
 let browser;
 let page;
 let url = process.argv[3] || localUrl;
+let title;
 
 const isLocal = url == localUrl;
 
@@ -27,19 +28,22 @@ if (!isNaN(url)) { // id → url
   url = `https://www.fxhash.xyz/generative/${url}`;
 }
 
-const getIpfsUrl = async (url) => {
+const getIpfsInfo = async (url) => {
   await page.goto(url);
 
-  const IpfsUrl = await page.evaluate(() => {
-    return document.querySelector('a[href^="https://gateway.fxhash2.xyz/ipfs"][class^="Button"]')?.href?.split('/?')[0];
+  const ipfsInfo = await page.evaluate(() => {
+    return  {
+      url: document.querySelector('a[href^="https://gateway.fxhash2.xyz/ipfs"][class^="Button"]')?.href?.split('/?')[0],
+      title: document.querySelector('h3')?.innerText,
+    }
   });
 
-  if (!IpfsUrl) {
+  if (!ipfsInfo.url) {
     console.log('usage: node fxsnapshot.js <count> <project-id|project-url>');
     process.exit(1);
   }
 
-  return IpfsUrl;
+  return ipfsInfo;
 }
 
 const getFxhashedUrl = (url) => {
@@ -60,12 +64,13 @@ const saveFrame = async (filename) => {
 };
 
 const takeShot = async () => {
-  const { fxhash, title } = await page.evaluate(() => {
+  const { fxhash, windowTitle } = await page.evaluate(() => {
     return {
       fxhash: window.fxhash,
-      title: document.title,
+      windowTitle: document.title,
     };
   });
+  title = isLocal ? windowTitle : title;
   const iteration = String(count).padStart(4, '0');
   const f = `images/${title}-${iteration}-${fxhash}.png`;
   console.log(f);
@@ -130,7 +135,9 @@ async function go() {
   }
 
   if (!isLocal) {
-    url = await getIpfsUrl(url);
+    const ipfsInfo = await getIpfsInfo(url);
+    url = ipfsInfo.url;
+    title = ipfsInfo.title;
   }
 
   page.on('error', (err) => {
