@@ -1,30 +1,30 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs').promises;
 
-const total = parseInt(process.argv[2]);
-let count = 1;
-
-let browser;
-let page;
-
-if (isNaN(total)) {
-  console.log('usage: node fxsnapshot.js <count>');
-  process.exit(1);
-}
-
 const localUrl = 'http://localhost:8080';
-let url = process.argv[3] || localUrl;
-const isLocal = url == localUrl;
-
-if (!isNaN(url)) {
-  url = `https://www.fxhash.xyz/generative/${url}`;
-}
+const total = parseInt(process.argv[2]);
 
 const viewportSettings = {
   deviceScaleFactor: 1,
   width: 800,
   height: 800,
 };
+
+let count = 1;
+let browser;
+let page;
+let url = process.argv[3] || localUrl;
+
+const isLocal = url == localUrl;
+
+if (isNaN(total)) {
+  console.log('usage: node fxsnapshot.js <count>');
+  process.exit(1);
+}
+
+if (!isNaN(url)) { // id → url
+  url = `https://www.fxhash.xyz/generative/${url}`;
+}
 
 const getIpfsUrl = async (url) => {
   await page.goto(url);
@@ -69,30 +69,46 @@ const takeShot = async () => {
   const f = `images/${title}-${iteration}-${fxhash}.png`;
   console.log(f);
   await saveFrame(f);
-  if (count < total) {
-    count += 1;
-    await page.goto(getFxhashedUrl(url));
-    bindFxpreviewHandler();
-  }
-  else {
-    process.exit(0);
-  }
 }
 
 // waitForEvent from https://github.com/puppeteer/puppeteer/issues/2455
 async function waitForEvent(event, timeout = 10000) {
   return Promise.race([
     page.evaluate(
-      event => new Promise(resolve => document.addEventListener(event, resolve)),
+      event => new Promise(resolve => window.addEventListener(event, resolve)),
       event
     ),
     page.waitForTimeout(timeout)
   ]);
 }
 
-async function bindFxpreviewHandler() {
-  await waitForEvent('fxhash-preview');
-  takeShot();
+async function waitForMessage() {
+  return new Promise(resolve => {
+    page.on('console', msg => {
+      const text = msg.text();
+      let m = text.match(/TRIGGER PREVIEW/);
+      m && resolve();
+    })
+  });
+}
+
+async function go() {
+  await page.goto(getFxhashedUrl(url));
+
+  if (isLocal) {
+    await waitForMessage();
+  } else {
+    await waitForEvent('fxhash-preview');
+  }
+  await takeShot();
+
+  if (count < total) {
+    count += 1;
+    await go();
+  }
+  else {
+    process.exit(0);
+  }
 }
 
 (async () => {
@@ -120,7 +136,6 @@ async function bindFxpreviewHandler() {
     console.log('PAGER ERROR:', err);
   });
 
-  await page.goto(getFxhashedUrl(url));
-  bindFxpreviewHandler();
+  await go();
 
 })();
